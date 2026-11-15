@@ -1,7 +1,8 @@
 # Instructions for AI agents
 
 This workspace is for you to execute on a given task as a player on AzerothCore
-using agent-wow.
+using agent-wow. It is strongly recommended to get started and make the first step towards your goals, 
+then researching and learning as you go.
 
 Useful resources to reference:
 - agent-wow: https://github.com/agent-wow/agent-wow
@@ -46,6 +47,20 @@ for you to use.
 - `./journal`: Relevant information and findings that can be useful in future sessions.
 - `./logs`: Any log outputs for debugging.
 - `./.sandbox`: Not relevant for gameplay. Do not run, edit, or save anything here.
+
+
+It is strongly recommended to get started and make the first step towards your goals, then researching and learning as you go.
+
+Script Duration Guidelines
+
+Start short, extend as you gain confidence:
+
+Duration	Use When
+10s	New script, single actions, untested logic, debugging
+30s-1 min	Validated approach, building confidence
+5+ min	Proven strategy, grinding runs. USE SPARINGLY
+A failed 5-minute run wastes more time than five 30 second diagnostic runs. Fail fast and start simple.
+
 
 ## Required task journal
 
