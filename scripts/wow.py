@@ -10,6 +10,7 @@ Python dependencies are standard library only; starting the relay requires Go.
 """
 from collections import deque
 import base64
+import fcntl
 import http.client
 import json
 import math
@@ -129,22 +130,33 @@ class Bridge:
         if not (client / "go.mod").is_file(): raise FileNotFoundError(f"Missing agent-wow checkout: {client}")
         root = workspace / "scripts" / ".wow-bridge"
         root.mkdir(parents=True, exist_ok=True)
-        build = Path(tempfile.mkdtemp(prefix="session-", dir=root))
-        (build / "main.go").write_text(_BRIDGE_GO)
-        (build / "go.mod").write_text("module github.com/agent-wow/agent-wow/commonbridge\n\ngo 1.27.1\n"
-            "require github.com/agent-wow/agent-wow v0.0.0\nreplace github.com/agent-wow/agent-wow => " + json.dumps(str(client)) + "\n")
-        end, ready = time.monotonic() + timeout_s, build / "ready.json"
-        with (build / "bridge.log").open("ab") as log:
-            try:
-                subprocess.run(["go", "build", "-mod=mod", "-o", str(build / "bridge"), "."], cwd=build,
-                               stdout=log, stderr=log, check=True, timeout=_remaining(end))
-            except (subprocess.SubprocessError, OSError) as e:
-                raise RuntimeError(f"Bridge build failed; see {build / 'bridge.log'}") from e
-            process = subprocess.Popen([str(build / "bridge"), character, str(ready)], cwd=workspace,
-                                       stdin=subprocess.DEVNULL, stdout=log, stderr=log)
+        build = root / "build"
+        build.mkdir(exist_ok=True)
+        session = Path(tempfile.mkdtemp(prefix="session-", dir=root))
+        end, ready = time.monotonic() + timeout_s, session / "ready.json"
+        with (session / "bridge.log").open("ab") as log:
+            with (root / "build.lock").open("a") as lock:
+                while True:
+                    try:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        _remaining(end)
+                        time.sleep(.1)
+                # Keep one executable; Go's build cache handles source and dependency changes.
+                (build / "main.go").write_text(_BRIDGE_GO)
+                (build / "go.mod").write_text("module github.com/agent-wow/agent-wow/commonbridge\n\ngo 1.27.1\n"
+                    "require github.com/agent-wow/agent-wow v0.0.0\nreplace github.com/agent-wow/agent-wow => " + json.dumps(str(client)) + "\n")
+                try:
+                    subprocess.run(["go", "build", "-mod=mod", "-o", str(build / "bridge"), "."], cwd=build,
+                                   stdout=log, stderr=log, check=True, timeout=_remaining(end))
+                except (subprocess.SubprocessError, OSError) as e:
+                    raise RuntimeError(f"Bridge build failed; see {session / 'bridge.log'}") from e
+                process = subprocess.Popen([str(build / "bridge"), character, str(ready)], cwd=workspace,
+                                           stdin=subprocess.DEVNULL, stdout=log, stderr=log)
         try:
             while not ready.is_file():
-                if process.poll() is not None: raise RuntimeError(f"Bridge exited; see {build / 'bridge.log'}")
+                if process.poll() is not None: raise RuntimeError(f"Bridge exited; see {session / 'bridge.log'}")
                 _remaining(end)
                 time.sleep(.1)
             info = json.loads(ready.read_text())
